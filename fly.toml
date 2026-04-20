@@ -5,7 +5,7 @@
 # Change `primary_region` to whichever region is closest to your users / S2 basin
 # (full list: `fly platform regions`). Common choices: "iad" (Virginia),
 # "sea" (Seattle), "lhr" (London), "nrt" (Tokyo).
-app = "agentmail"
+app = "agentmail-takehome-teyj"
 primary_region = "iad"
 
 [build]
@@ -14,7 +14,7 @@ primary_region = "iad"
 # DEMO_AGENT_REGISTRATION_TOKEN) are set via `fly secrets set ...`.
 [env]
   DATABASE_PATH = "/data/agentmail.db"
-  S2_BASIN = "agentmail"
+  S2_BASIN = "agentmail-takehomebasin"
   PORT = "8080"
   # Sidecar deployment: demo agent talks to main service over loopback.
   DEMO_AGENT_BASE_URL = "http://localhost:8080"

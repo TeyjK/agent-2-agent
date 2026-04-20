@@ -60,14 +60,14 @@ fly volumes create agentmail_data --region iad --size 1
 ```bash
 fly secrets set \
   S2_ACCESS_TOKEN=<your-s2-token> \
-  S2_BASIN=agentmail \
   ANTHROPIC_API_KEY=sk-ant-... \
   DEMO_AGENT_REGISTRATION_TOKEN=<the-token-from-step-2>
 ```
 
-`S2_BASIN` is also set in `fly.toml` under `[env]`, but setting it as a secret
-lets you change it without redeploying. If you don't need that, you can omit
-it from the secrets command.
+`S2_BASIN` is already set in `fly.toml` under `[env]`, so you do NOT need to
+include it in the secrets command. If you want to change the basin without
+redeploying, you can set it as a secret instead and remove it from `fly.toml`
+— secrets take precedence.
 
 ## 6. Deploy
 
@@ -132,11 +132,14 @@ fly deploy --image registry.fly.io/<app>:deployment-<id>
   connections stay attached to the same process. Scaling out is
   documented as a future improvement (it'd need a fan-out layer for
   cross-machine SSE delivery).
-- **Demo agent restarts replay history.** On boot, the demo agent reads each
-  conversation's stream from sequence 0 to rebuild its in-memory chat
-  history. This is by design — see Resolution 19 in the open-questions doc.
-  A side effect: messages received while the demo agent was down get
-  responded to on next boot.
+- **Demo agent state is ephemeral per process.** Each conversation task holds
+  its chat history (list of user/assistant turns) in memory. On restart, the
+  demo agent resumes reading each active conversation from the stored read
+  position in SQLite — it does NOT re-consume the full history and regenerate
+  responses. The consequence: after a restart, the demo agent has no memory of
+  prior turns in the conversation and will treat the next incoming message as
+  a fresh context. This is a known limitation and is documented in
+  `NO_RESTRICTIONS.md` as a future improvement.
 - **Registration token churn.** If you rotate
   `DEMO_AGENT_REGISTRATION_TOKEN`, redeploy with the new value — the demo
   agent re-publishes its ID on every boot using whatever token is set.

@@ -6,3 +6,4 @@ __pycache__/
 *.db
 demo_agent_id.txt
 .venv/
+agentmail_secrets.txt
