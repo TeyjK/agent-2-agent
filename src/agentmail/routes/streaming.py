@@ -79,33 +79,36 @@ async def sse_stream(
         records_since_update = 0
         last_update_time = time.monotonic()
         read_iter = streams.read_session(s2, conversation_id, start_seq).__aiter__()
+        next_task: asyncio.Task | None = None
+        close_task = asyncio.ensure_future(reader.close_event.wait())
         try:
             while True:
-                next_task = asyncio.ensure_future(read_iter.__anext__())
-                close_task = asyncio.ensure_future(reader.close_event.wait())
+                if next_task is None:
+                    next_task = asyncio.ensure_future(read_iter.__anext__())
                 try:
-                    done, pending = await asyncio.wait(
+                    done, _ = await asyncio.wait(
                         {next_task, close_task},
                         return_when=asyncio.FIRST_COMPLETED,
+                        timeout=config.SSE_KEEPALIVE_INTERVAL_SECONDS,
                     )
                 except asyncio.CancelledError:
-                    next_task.cancel()
-                    close_task.cancel()
                     raise
 
-                for t in pending:
-                    t.cancel()
-                    try:
-                        await t
-                    except (asyncio.CancelledError, StopAsyncIteration, Exception):
-                        pass
+                if not done:
+                    # Idle timeout — emit an SSE comment keepalive so proxies
+                    # (Fly.io, nginx, etc.) don't drop the connection. Both
+                    # tasks keep running for the next iteration.
+                    yield {"comment": "keepalive"}
+                    continue
 
                 if close_task in done:
                     break
                 try:
                     seq, record = next_task.result()
                 except StopAsyncIteration:
+                    next_task = None
                     break
+                next_task = None
 
                 yield {"id": str(seq), "data": json.dumps(record)}
                 next_seq_to_read = seq + 1
@@ -135,6 +138,18 @@ async def sse_stream(
                 ),
             }
         finally:
+            if next_task is not None and not next_task.done():
+                next_task.cancel()
+                try:
+                    await next_task
+                except (asyncio.CancelledError, StopAsyncIteration, Exception):
+                    pass
+            if not close_task.done():
+                close_task.cancel()
+                try:
+                    await close_task
+                except (asyncio.CancelledError, Exception):
+                    pass
             if next_seq_to_read is not None:
                 try:
                     await db.set_read_position(
@@ -152,7 +167,7 @@ async def sse_stream(
                 pass
             registry.unregister_reader(reader)
 
-    return EventSourceResponse(event_generator(), ping=15)
+    return EventSourceResponse(event_generator())
 
 
 async def _ws_send_error(ws: WebSocket, code: str, message: str) -> None:

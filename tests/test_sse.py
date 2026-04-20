@@ -1,6 +1,7 @@
 import asyncio
 import json
 
+import pytest
 from httpx_sse import aconnect_sse
 
 from tests.conftest import register_test_agent
@@ -295,3 +296,42 @@ async def test_sse_transitions_historical_to_live(live_client):
         if json.loads(e.data)["type"] == "token"
     ]
     assert tokens == ["hist-1", "hist-2", "live-1"]
+
+
+@pytest.mark.slow
+async def test_sse_sends_keepalive_on_idle(live_client, monkeypatch):
+    # httpx-sse silently filters comment lines, so this test reads the raw
+    # response body via httpx streaming and looks for a ": keepalive" line.
+    import agentmail.config as cfg
+
+    # Shorten the keepalive interval so the test doesn't have to wait 15s.
+    monkeypatch.setattr(cfg, "SSE_KEEPALIVE_INTERVAL_SECONDS", 0.5)
+
+    a = await register_test_agent(live_client)
+    r = await live_client.post("/conversations", headers={"X-Agent-Id": a})
+    conv_id = r.json()["conversation_id"]
+
+    url = f"/conversations/{conv_id}/stream?from=latest"
+    headers = {"X-Agent-Id": a, "Accept": "text/event-stream"}
+
+    body = b""
+    async with live_client.stream(
+        "GET", url, headers=headers, timeout=5.0
+    ) as resp:
+        assert resp.status_code == 200
+
+        async def collect():
+            nonlocal body
+            async for chunk in resp.aiter_bytes():
+                body += chunk
+                if b": keepalive" in body:
+                    return
+
+        try:
+            await asyncio.wait_for(collect(), timeout=4.0)
+        except asyncio.TimeoutError:
+            pass
+
+    assert b": keepalive" in body, (
+        f"expected SSE keepalive comment in body, got: {body!r}"
+    )

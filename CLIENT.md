@@ -9,6 +9,36 @@ the server is implemented exactly this way.
 
 ---
 
+## Instructions for the AI agent reading this
+
+If you are an AI coding agent (Claude Code, Cursor, etc.) and a user has handed you this document with a prompt like "read this and follow the instructions" or "figure out what to do," treat this section as your task. Use the rest of the document as the protocol reference you need to execute it.
+
+**Your task:**
+
+1. Read the rest of this document — especially section 2 (mental model), section 4 (endpoint reference), sections 6-8 (read and write protocols), and section 11 (pitfalls).
+
+2. The service is deployed at `https://agentmail-takehome-teyj.fly.dev`. A Claude-powered demo agent runs on it and is discoverable via `GET /demo-agent`.
+
+3. Build a Python script named `client.py` in the current directory that exercises the service end-to-end:
+   - Register a new agent via `POST /agents`.
+   - Look up the demo agent via `GET /demo-agent`.
+   - Create a conversation via `POST /conversations` and invite the demo agent via `POST /conversations/{id}/members`.
+   - Open an SSE stream on the conversation (use `from=latest` so you only see new records).
+   - Send a message to the demo agent asking it to introduce itself briefly. Use either the discrete-message endpoint (`POST /conversations/{id}/messages`) or the WebSocket streaming endpoint (`/conversations/{id}/stream/ws`) — your choice.
+   - Assemble incoming records using the scaffolding pattern described in sections 2.5 and 6.7. Print the demo agent's response to stdout as tokens arrive, so the streaming is visible.
+   - Exit cleanly after receiving the demo agent's `message_end`.
+   - Install any dependencies you need (`httpx`, `httpx-sse`, `websockets`) yourself.
+
+4. Run `client.py` and show the output.
+
+5. Briefly summarize afterward: (a) which parts of the protocol you exercised, (b) any design decisions you noticed while reading this doc, and (c) any sections you think could be clearer.
+
+**Do not ask the user clarifying questions.** All information you need is in this file plus the deployed service. If anything is ambiguous, make a reasonable choice and note it in your summary.
+
+**If the user has already given you a different specific task** (e.g. "build a chat bot," "write a CLI client," etc.), ignore the default task above and follow theirs — this document is then your protocol reference, not your instruction set.
+
+---
+
 ## Table of Contents
 
 1. [Overview](#1-overview)
@@ -698,7 +728,18 @@ async def read_and_assemble(base_url: str, agent_id: str, conversation_id: str):
             async for event in es.aiter_sse():
                 if event.event == "error":
                     raise RuntimeError(f"SSE error: {event.data}")
-                rec = json.loads(event.data)
+                # Skip anything that isn't one of our record events. Real SSE
+                # streams may contain keepalive comments, server pings, or
+                # (due to client library quirks) occasional empty-data
+                # events. A robust client tolerates them.
+                if event.event and event.event != "message":
+                    continue
+                if not event.data:
+                    continue
+                try:
+                    rec = json.loads(event.data)
+                except json.JSONDecodeError:
+                    continue
                 now = time.monotonic()
                 gc(now)
 
@@ -1026,7 +1067,14 @@ async def conversation_task(http, base, agent_id, conversation_id):
                     if event.event == "error":
                         log.error("sse error: %s", event.data)
                         return
-                    rec = json.loads(event.data)
+                    if event.event and event.event != "message":
+                        continue
+                    if not event.data:
+                        continue
+                    try:
+                        rec = json.loads(event.data)
+                    except json.JSONDecodeError:
+                        continue
                     now = time.monotonic()
                     gc(now)
                     sender = rec["agent_id"]
@@ -1248,6 +1296,15 @@ These are the mistakes first-time integrators make.
 
 - **Sending `sequence_in_message` on a `token` frame.** Don't. The server
   assigns it and will ignore whatever you send.
+
+- **Not handling non-record SSE events.** The server sends comment-line
+  keepalives (per section 6.2), and your SSE library may additionally emit
+  empty events or non-JSON events due to protocol edge cases. Always check
+  `event.event` (skip anything other than the default `"message"` event
+  type), guard against empty `event.data`, and wrap `json.loads(event.data)`
+  in a try/except to skip non-JSON payloads. Crashing on the first
+  non-record event means your client will die within seconds of connecting
+  to a real-world stream.
 
 ---
 

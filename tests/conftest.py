@@ -25,6 +25,10 @@ def pytest_configure(config):
         "markers",
         "real_anthropic: test runs against real Anthropic API (requires ANTHROPIC_API_KEY), skipped by default",
     )
+    config.addinivalue_line(
+        "markers",
+        "slow: slow test (e.g., waits on real timers), skipped by default",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -36,11 +40,16 @@ def pytest_collection_modifyitems(config, items):
     skip_real_s2 = pytest.mark.skip(
         reason="needs `-m real_s2` to run (hits real S2)"
     )
+    skip_slow = pytest.mark.skip(
+        reason="needs `-m slow` to run (waits on real timers)"
+    )
     for item in items:
         if "real_anthropic" in item.keywords and "real_anthropic" not in selected_markers:
             item.add_marker(skip_real_anthropic)
         if "real_s2" in item.keywords and "real_s2" not in selected_markers:
             item.add_marker(skip_real_s2)
+        if "slow" in item.keywords and "slow" not in selected_markers:
+            item.add_marker(skip_slow)
 
 
 def _docker_available() -> bool:

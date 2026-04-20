@@ -31,3 +31,11 @@ WEBSOCKET_IDLE_TIMEOUT_SECONDS: int = 300
 # Read-position update cadence on SSE connections (Resolution 6).
 READ_POSITION_UPDATE_EVERY_N_RECORDS: int = 10
 READ_POSITION_UPDATE_EVERY_N_SECONDS: float = 5.0
+
+# How often to emit an SSE `: keepalive` comment during idle periods. Proxies
+# (Fly.io, nginx, cloudflare, etc.) drop idle HTTP connections, so we need to
+# send something on the wire every so often. Overridable via env var so tests
+# can exercise faster.
+SSE_KEEPALIVE_INTERVAL_SECONDS: float = float(
+    os.environ.get("SSE_KEEPALIVE_INTERVAL_SECONDS", "15")
+)
