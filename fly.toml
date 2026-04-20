@@ -1,45 +1,23 @@
-# Fly.io app configuration for AgentMail.
+# fly.toml app configuration file generated for app-cool-wave-3849 on 2026-04-20T05:00:56Z
 #
-# Change `app` to a unique name (Fly app names are global). For example:
-#   app = "agentmail-yourname"
-# Change `primary_region` to whichever region is closest to your users / S2 basin
-# (full list: `fly platform regions`). Common choices: "iad" (Virginia),
-# "sea" (Seattle), "lhr" (London), "nrt" (Tokyo).
-app = "agentmail"
-primary_region = "iad"
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'app-cool-wave-3849'
+primary_region = 'iad'
 
 [build]
-
-# Non-secret config. Secrets (S2_ACCESS_TOKEN, ANTHROPIC_API_KEY,
-# DEMO_AGENT_REGISTRATION_TOKEN) are set via `fly secrets set ...`.
-[env]
-  DATABASE_PATH = "/data/agentmail.db"
-  S2_BASIN = "agentmail"
-  PORT = "8080"
-  # Sidecar deployment: demo agent talks to main service over loopback.
-  DEMO_AGENT_BASE_URL = "http://localhost:8080"
-  DEMO_AGENT_ID_FILE = "/data/demo_agent_id.txt"
-
-# Persistent volume for SQLite + demo-agent ID file. Create it once with:
-#   fly volumes create agentmail_data --region iad --size 1
-[mounts]
-  source = "agentmail_data"
-  destination = "/data"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  # WebSocket and SSE require long-lived connections — never auto-stop.
-  auto_stop_machines = false
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
-
-  [http_service.concurrency]
-    type = "connections"
-    soft_limit = 200
-    hard_limit = 250
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  memory = "512mb"
-  cpu_kind = "shared"
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
