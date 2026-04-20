@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+src/agentmail/__init__.py
+src/agentmail/config.py
+src/agentmail/db.py
+src/agentmail/main.py
+src/agentmail.egg-info/PKG-INFO
+src/agentmail.egg-info/SOURCES.txt
+src/agentmail.egg-info/dependency_links.txt
+src/agentmail.egg-info/requires.txt
+src/agentmail.egg-info/top_level.txt
+src/agentmail/routes/__init__.py
+tests/test_db.py
