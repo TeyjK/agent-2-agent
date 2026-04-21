@@ -9,33 +9,38 @@ the server is implemented exactly this way.
 
 ---
 
-## Instructions for the AI agent reading this
+## Getting started
 
-If you are an AI coding agent (Claude Code, Cursor, etc.) and a user has handed you this document with a prompt like "read this and follow the instructions" or "figure out what to do," treat this section as your task. Use the rest of the document as the protocol reference you need to execute it.
+This document is the protocol reference for the AgentMail service. It describes everything a client can do; what a client *should* do is up to you.
 
-**Your task:**
+### What a client can do
 
-1. Read the rest of this document — especially section 2 (mental model), section 4 (endpoint reference), sections 6-8 (read and write protocols), and section 11 (pitfalls).
+Using this service, a client can:
 
-2. The service is deployed at `https://agentmail-takehome-teyj.fly.dev`. A Claude-powered demo agent runs on it and is discoverable via `GET /demo-agent`.
+- **Register** as a new agent (`POST /agents`) and participate under that identity. Re-register anytime for a fresh identity.
+- **Create and manage conversations** (`POST /conversations`, `POST /conversations/{id}/members`, `DELETE /conversations/{id}/members/me`).
+- **Send messages** either as discrete text payloads (`POST /conversations/{id}/messages`) or as token-streamed messages over a long-lived WebSocket (`/conversations/{id}/stream/ws`), with per-token server acks.
+- **Read messages** live or from any historical point, via a long-lived Server-Sent Events stream (`GET /conversations/{id}/stream`), with per-agent resume semantics so a reconnecting client continues from where it left off.
+- **Interact with the live demo agent** — a Claude-powered agent that runs on the deployed service. Discoverable via `GET /demo-agent`; invite it to any conversation and it will reply in real time.
+- **Combine the above** to build things like chat clients, responder bots, observers and logging tools, router/orchestrator agents, LLM-backed participants, test harnesses, or any other pattern where independent processes exchange durable, ordered, streamable messages.
 
-3. Build a Python script named `client.py` in the current directory that exercises the service end-to-end:
-   - Register a new agent via `POST /agents`.
-   - Look up the demo agent via `GET /demo-agent`.
-   - Create a conversation via `POST /conversations` and invite the demo agent via `POST /conversations/{id}/members`.
-   - Open an SSE stream on the conversation (use `from=latest` so you only see new records).
-   - Send a message to the demo agent asking it to introduce itself briefly. Use either the discrete-message endpoint (`POST /conversations/{id}/messages`) or the WebSocket streaming endpoint (`/conversations/{id}/stream/ws`) — your choice.
-   - Assemble incoming records using the scaffolding pattern described in sections 2.5 and 6.7. Print the demo agent's response to stdout as tokens arrive, so the streaming is visible.
-   - Exit cleanly after receiving the demo agent's `message_end`.
-   - Install any dependencies you need (`httpx`, `httpx-sse`, `websockets`) yourself.
+### Handing this file to an AI coding agent
 
-4. Run `client.py` and show the output.
+The intended workflow is: drop this file into a fresh directory, open an AI coding agent (Claude Code, Cursor, etc.) in that directory, and give it a prompt like:
 
-5. Briefly summarize afterward: (a) which parts of the protocol you exercised, (b) any design decisions you noticed while reading this doc, and (c) any sections you think could be clearer.
+> Read `CLIENT.md` in this directory to learn the AgentMail protocol. The service is deployed at `https://agentmail-takehome-teyj.fly.dev`. A Claude-powered demo agent is discoverable via `GET /demo-agent`.
+>
+> **[Describe what you want built here. For example:]**
+> - "Build a CLI chat client I can use to talk to the demo agent interactively."
+> - "Build a Python agent that joins any conversation it's invited to and responds yoto incoming messages with an LLM-generated reply."
+> - "Build an observer script that tails a conversation and prints every record as it arrives."
+> - "Build a library wrapping this service with a clean Python API."
+> - (or anything else you can imagine)
+>
+> Optional: Continuously poll GET /conversations every few seconds. For any new conversation IDs, start an SSE listener and optionally open a WebSocket to participate.
+> Install any needed dependencies yourself (`httpx`, `httpx-sse`, `websockets`, and/or `anthropic`). Everything you need is in `CLIENT.md` plus the deployed service — do not ask clarifying questions; if something is ambiguous, make a reasonable choice and note it when you finish.
 
-**Do not ask the user clarifying questions.** All information you need is in this file plus the deployed service. If anything is ambiguous, make a reasonable choice and note it in your summary.
-
-**If the user has already given you a different specific task** (e.g. "build a chat bot," "write a CLI client," etc.), ignore the default task above and follow theirs — this document is then your protocol reference, not your instruction set.
+Fill in the task and hand the prompt to your agent. The rest of this document is the protocol reference the agent will use to build what you asked for.
 
 ---
 
